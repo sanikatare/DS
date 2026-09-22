@@ -1,0 +1,74 @@
+syntax = "proto3";
+
+package upi;
+
+// ---------------------------------------------------------------------------
+// Sender Bank gRPC Service
+// ---------------------------------------------------------------------------
+service SenderBankService {
+  rpc Debit (DebitRequest) returns (DebitResponse);
+  rpc RollbackDebit (RollbackRequest) returns (RollbackResponse);
+}
+
+// ---------------------------------------------------------------------------
+// NPCI Switch Simulator gRPC Service
+// ---------------------------------------------------------------------------
+service NPCISwitchService {
+  rpc Route (RouteRequest) returns (RouteResponse);
+}
+
+// ---------------------------------------------------------------------------
+// Receiver Bank gRPC Service
+// ---------------------------------------------------------------------------
+service ReceiverBankService {
+  rpc Credit (CreditRequest) returns (CreditResponse);
+}
+
+// ---------------------------------------------------------------------------
+// Message Definitions
+// ---------------------------------------------------------------------------
+message DebitRequest {
+  string sender_id = 1;
+  double amount = 2;
+  string transaction_id = 3;
+}
+
+message DebitResponse {
+  string status = 1;
+  bool approved = 2;
+  string account_id = 3;
+  string reason = 4;
+}
+
+message RollbackRequest {
+  string transaction_id = 1;
+}
+
+message RollbackResponse {
+  string status = 1;
+  double amount = 2;
+}
+
+message RouteRequest {
+  string transaction_id = 1;
+  string sender_bank = 2;
+  string receiver_bank = 3;
+  double amount = 4;
+}
+
+message RouteResponse {
+  string status = 1;
+  string transaction_id = 2;
+}
+
+message CreditRequest {
+  string receiver_id = 1;
+  double amount = 2;
+  string transaction_id = 3;
+}
+
+message CreditResponse {
+  string status = 1;
+  string ack_id = 2;
+  string reason = 3;
+}

@@ -1,0 +1,637 @@
+/* ==========================================================================
+   UPI FLOW — LIVE DISTRIBUTED PAYMENT NETWORK
+   Design System: Warm Neutral & Graphite with Orange & Green Signal Accents
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+
+:root {
+  /* Strict Color System */
+  --bg-canvas: #F8F7F4;
+  --bg-surface: #FFFFFF;
+  --bg-grid-dot: rgba(44, 45, 47, 0.07);
+
+  /* Graphite Palette */
+  --graphite: #2C2D2F;
+  --graphite-secondary: #66686D;
+  --muted: #96989D;
+  --border: #E6E4E0;
+
+  /* Primary Orange Signal Accents */
+  --orange-primary: #FF7A00;
+  --orange-dark: #E96800;
+  --orange-light: #FFF0E3;
+  --orange-glow: rgba(255, 122, 0, 0.18);
+
+  /* Success Green */
+  --green-success: #00A878;
+  --green-light: #E7F7F1;
+  --green-glow: rgba(0, 168, 120, 0.18);
+
+  /* Warning & Danger */
+  --warning: #E6A700;
+  --warning-light: #FFF8E6;
+  --danger: #D64545;
+  --danger-light: #FDE8E8;
+
+  /* Radius & Transitions */
+  --radius-pill: 9999px;
+  --radius-node: 12px;
+  --ease-smooth: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-canvas);
+  color: var(--graphite);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Background Canvas Texture */
+.app-viewport {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-canvas);
+  background-image: radial-gradient(var(--bg-grid-dot) 1px, transparent 1px);
+  background-size: 24px 24px;
+  position: relative;
+}
+
+/* Minimal Top Identity Bar */
+.top-bar {
+  height: 52px;
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  background: rgba(248, 247, 244, 0.95);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.brand-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 26px;
+  height: 26px;
+  background: var(--graphite);
+  color: #ffffff;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 0.8rem;
+}
+
+.brand-title {
+  font-size: 0.95rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--graphite);
+}
+
+.brand-subtitle {
+  font-size: 0.72rem;
+  color: var(--graphite-secondary);
+  font-weight: 600;
+  border-left: 1px solid var(--border);
+  padding-left: 12px;
+}
+
+/* Compact Floating Navigation Dock */
+.dock-container {
+  position: fixed;
+  top: 66px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid var(--graphite);
+  box-shadow: 0 10px 30px rgba(44, 45, 47, 0.08);
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dock-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border-radius: var(--radius-pill);
+  color: var(--graphite-secondary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s var(--ease-smooth);
+}
+
+.dock-item:hover {
+  color: var(--graphite);
+  background: rgba(44, 45, 47, 0.05);
+}
+
+.dock-item.active {
+  background: var(--graphite);
+  color: #ffffff;
+}
+
+.main-canvas {
+  flex: 1;
+  padding: 80px 32px 32px;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* Standardized Typography & Spacing System */
+.page-header {
+  margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.page-title {
+  font-size: 1.85rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  color: var(--graphite);
+  line-height: 1.2;
+}
+
+.page-subtitle {
+  font-size: 0.85rem;
+  color: var(--graphite-secondary);
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+.section-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--graphite);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--graphite);
+  margin-bottom: 6px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 6px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ui-card {
+  background: #ffffff;
+  border: 1.5px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 24px;
+  box-shadow: 0 4px 16px rgba(44, 45, 47, 0.03);
+}
+
+.ui-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.ui-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.ui-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.ui-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+
+/* ==========================================================================
+   PAGE 01 — HERO NETWORK CANVAS & TOPOLOGY MONITOR
+   ========================================================================== */
+.metrics-strip-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 28px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 10px rgba(44, 45, 47, 0.03);
+}
+
+.metric-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+}
+
+.metric-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.metric-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.metric-value-orange {
+  color: var(--orange-primary);
+}
+
+.metric-value-graphite {
+  color: var(--graphite);
+}
+
+.metric-value-green {
+  color: var(--green-success);
+}
+
+.metric-cell-divider {
+  width: 1px;
+  height: 32px;
+  background: var(--border);
+}
+
+.hero-canvas-container {
+  position: relative;
+  width: 100%;
+  height: 560px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--bg-surface);
+  box-shadow: 0 4px 24px rgba(44, 45, 47, 0.04);
+  overflow: hidden;
+}
+
+/* Ambient Radial Glows */
+.glow-layer-orange {
+  position: absolute;
+  top: 30%;
+  left: 45%;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, var(--orange-glow) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.glow-layer-green {
+  position: absolute;
+  bottom: 10%;
+  left: 40%;
+  width: 450px;
+  height: 350px;
+  background: radial-gradient(circle, var(--green-glow) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* SVG Line & Particle Paths */
+.hero-svg-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.hero-path {
+  stroke: #C8C6C2;
+  stroke-width: 2.2;
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke 0.4s var(--ease-smooth);
+}
+
+.hero-path.path-active {
+  stroke: var(--orange-primary);
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 6px var(--orange-glow));
+}
+
+.hero-path.path-settled {
+  stroke: var(--green-success);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px var(--green-glow));
+}
+
+.hero-path.path-disrupted {
+  stroke: var(--danger);
+  stroke-width: 3;
+  stroke-dasharray: 6 6;
+}
+
+/* Particle Signal Dot Animation */
+.particle-dot {
+  fill: var(--orange-primary);
+  r: 5;
+  filter: drop-shadow(0 0 6px var(--orange-primary));
+}
+
+/* Spatial Microservice Nodes */
+.hero-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: #ffffff;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(44, 45, 47, 0.06);
+  cursor: pointer;
+  transition: all 0.25s var(--ease-smooth);
+  user-select: none;
+}
+
+.hero-node:hover {
+  transform: translate(-50%, -53%);
+  border-color: var(--orange-primary);
+  box-shadow: 0 10px 28px rgba(255, 122, 0, 0.15);
+}
+
+.hero-node.selected {
+  border-color: var(--orange-primary);
+  box-shadow: 0 0 0 3px var(--orange-glow);
+}
+
+/* Client App Node */
+.node-client-app {
+  width: 195px;
+  height: 82px;
+  padding: 12px 16px;
+  border-top: 3px solid var(--orange-primary);
+}
+
+/* Central Orchestration Engine Node */
+.node-central-engine {
+  width: 270px;
+  height: 112px;
+  padding: 14px 18px;
+  border: 2px solid var(--graphite);
+  box-shadow: 0 0 0 4px rgba(255, 122, 0, 0.06), 0 8px 24px rgba(44, 45, 47, 0.08);
+}
+
+.node-central-engine.processing {
+  border-color: var(--orange-primary);
+  box-shadow: 0 0 0 6px var(--orange-glow);
+  animation: pulse-ring 1.8s infinite;
+}
+
+/* Orchestrator Badge */
+.orchestrator-badge {
+  display: inline-block;
+  background: var(--orange-light);
+  color: var(--orange-dark);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 122, 0, 0.25);
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+
+/* Downstream Microservice Nodes */
+.node-downstream {
+  width: 220px;
+  height: 100px;
+  padding: 14px 18px;
+}
+
+.dot-status {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot-status.healthy {
+  background: var(--green-success);
+  box-shadow: 0 0 6px var(--green-success);
+}
+
+.dot-status.active {
+  background: var(--orange-primary);
+  box-shadow: 0 0 6px var(--orange-primary);
+}
+
+.dot-status.disrupted {
+  background: var(--danger);
+  box-shadow: 0 0 6px var(--danger);
+}
+
+/* Technical Telemetry Overlay Drawer */
+.telemetry-inspector {
+  position: absolute;
+  right: 24px;
+  top: 24px;
+  width: 340px;
+  background: #ffffff;
+  border: 2px solid var(--graphite);
+  border-radius: 16px;
+  padding: 22px;
+  box-shadow: 0 20px 48px rgba(44, 45, 47, 0.15);
+  z-index: 70;
+}
+
+/* Settlement Banner Overlay */
+.settlement-toast {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  background: var(--green-light);
+  border: 2px solid var(--green-success);
+  color: var(--green-success);
+  padding: 12px 20px;
+  border-radius: var(--radius-pill);
+  font-weight: 800;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  box-shadow: 0 8px 24px var(--green-glow);
+  z-index: 80;
+  animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ==========================================================================
+   PAGE 02 — TRANSACTION LAUNCHPAD (TRANSFER VIEW)
+   ========================================================================== */
+.composer-spatial-container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 40px 0;
+}
+
+.composer-pair {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  margin-bottom: 40px;
+}
+
+.participant-node-box {
+  flex: 1;
+  border: 2px solid var(--border);
+  border-radius: 16px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.8);
+  text-align: center;
+  transition: all 0.25s var(--ease-smooth);
+}
+
+.participant-node-box.active-participant {
+  border-color: var(--graphite);
+  background: #ffffff;
+}
+
+.amount-spatial-input {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 3.5rem;
+  font-weight: 800;
+  text-align: center;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--border);
+  color: var(--graphite);
+  padding: 10px 0;
+  margin-bottom: 32px;
+}
+
+.amount-spatial-input:focus {
+  outline: none;
+  border-color: var(--orange-primary);
+}
+
+.btn-trigger-signal {
+  width: 100%;
+  background: var(--orange-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 18px;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.25s var(--ease-smooth);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.btn-trigger-signal:hover {
+  background: var(--orange-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(255, 122, 0, 0.35);
+}
+
+.spatial-select {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--graphite);
+}
+
+.spatial-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 0.85rem;
+  color: var(--graphite);
+}
+
+/* Badges */
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.badge-status.SUCCESS {
+  background: var(--green-light);
+  color: var(--green-success);
+}
+
+.badge-status.FAILED {
+  background: var(--danger-light);
+  color: var(--danger);
+}
+
+.badge-status.PROCESSING {
+  background: var(--orange-light);
+  color: var(--orange-primary);
+}
+
+/* Keyframes */
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(255, 122, 0, 0.3); }
+  70% { box-shadow: 0 0 0 12px rgba(255, 122, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 122, 0, 0); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
