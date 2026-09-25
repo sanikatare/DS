@@ -2,9 +2,7 @@
 
 An academic, microservice-based **UPI-style Distributed Transaction Simulator** demonstrating core Distributed Systems syllabus topics, communication paradigms, fault-tolerance patterns, message brokers, WebRTC peer-to-peer channels, and real-time telemetry.
 
-> **Academic Disclaimer**: This project is strictly an **educational academic simulator** designed for distributed systems analysis and viva demonstration. It is run entirely locally on a single machine and is not production financial infrastructure.
 
----
 
 ## 🎓 Distributed Systems Syllabus Topic Mapping
 
