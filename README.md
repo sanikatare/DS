@@ -4,7 +4,7 @@ An academic, microservice-based **UPI-style Distributed Transaction Simulator** 
 
 
 
-## 🏛️ System Architecture & Local Service Topology
+##  System Architecture & Local Service Topology
 
 The backend runs as independent Python processes directly on `localhost`:
 
@@ -26,12 +26,12 @@ Sender Bank :8001       NPCI Switch :8002
                        (gRPC :50053)
 ```
 
-In **Phase 5 (Direct Peer-to-Peer)**, the NPCI Switch is bypassed:
+In * (Direct Peer-to-Peer)**, the NPCI Switch is bypassed:
 ```text
 Sender Bank :8001 === Direct HTTP ===> Receiver Bank :8003
 ```
 
-In **Phase 6 (WebRTC)**, backend services act only as signaling brokers, after which peers communicate directly:
+In ** (WebRTC)**, backend services act only as signaling brokers, after which peers communicate directly:
 ```text
 Browser A <========== RTCDataChannel ('upi-p2p') ==========> Browser B
 ```
