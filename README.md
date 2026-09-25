@@ -4,35 +4,6 @@ An academic, microservice-based **UPI-style Distributed Transaction Simulator** 
 
 
 
-## 🎓 Distributed Systems Syllabus Topic Mapping
-
-### Unit I Topics & Codebase Implementation
-
-| Syllabus Topic | Codebase Implementation & Location |
-| :--- | :--- |
-| **1. Definition of Distributed Systems** | Independent autonomous microservices (`Transaction Service :8000`, `Sender Bank :8001`, `NPCI Switch :8002`, `Receiver Bank :8003`) coordinating over localhost to appear as a single unified UPI payment system. |
-| **2. Goals of Distributed Systems** | Demonstrates location/access transparency, high availability, fault tolerance, and openness via standard REST, gRPC, and AMQP interfaces. |
-| **3. Types of Distributed Systems** | Demonstrates **Distributed Transaction Processing Systems** (centralized saga workflow) and **Peer-to-Peer Systems** (direct P2P/WebRTC node settlement). |
-| **4. Distributed System Architectures** | Multi-tier Client-Server architecture (`Client App → Orchestrator → Downstream Banks`) and Decentralized P2P architecture (Phase 5 HTTP P2P & Phase 6 WebRTC DataChannel). |
-| **5. Design Issues in Distributed Systems** | Addresses partial failures, network latency, concurrency, state synchronization, idempotency, and rollback without shared memory. |
-| **6. Middleware** | `Uvicorn ASGI`, `gRPC HTTP/2 engine`, `RabbitMQ AMQP broker`, and `WebSocket manager` act as middleware separating business logic from transport protocols. |
-| **7. Model of Distributed Computations** | Asynchronous distributed execution model with discrete state transitions, timeline records, and message passing primitives. |
-
-### Unit II Topics & Codebase Implementation
-
-| Syllabus Topic | Codebase Implementation & Location |
-| :--- | :--- |
-| **1. Communication Fundamentals** | Synchronous REST request-response (HTTP/1.1 JSON) vs asynchronous event-driven messaging. |
-| **2. Remote Procedure Call (RPC)** | High-performance gRPC implementation using Protocol Buffers ([`upi.proto`](file:///c:/Users/DELL/Desktop/FA/fa/services/proto/upi.proto)), binary stubs, deadlines, and retry handling. |
-| **3. Message-Oriented Communication** | Decoupled asynchronous messaging using RabbitMQ AMQP 0-9-1 with durable topic exchange (`upi.transactions`), queues, ACK/NACK, and Dead Letter Exchange (`upi.dlx`). |
-| **4. Stream-Oriented Communication** | Low-latency persistent WebSocket streaming (`ws://localhost:8000/ws/transactions`) with sequence numbers, heartbeats, and replay recovery. |
-| **5. P2P Messaging** | Direct inter-bank settlement (`Sender Bank :8001 → Receiver Bank :8003`) bypassing the central NPCI Switch. |
-| **6. WebRTC** | Direct browser-to-browser `RTCDataChannel` payload streaming with backend WebSocket signaling broker (SDP offer/answer & ICE candidates). |
-| **7. Names, Identifiers & Addresses** | Network addresses (`127.0.0.1:8000..8003`), account handles (`sanika@bank`), UUID transaction IDs, and idempotency keys (`auto-xyz`). |
-| **8. Fault Tolerance** | 3-state Circuit Breaker (`CLOSED`, `OPEN`, `HALF_OPEN`), exponential backoff retries, failure/timeout injection, idempotency, and Saga compensating rollback. |
-
----
-
 ## 🏛️ System Architecture & Local Service Topology
 
 The backend runs as independent Python processes directly on `localhost`:
