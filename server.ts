@@ -12,6 +12,8 @@ import {
   BeaconProtocolManager,
   GlobalStateManager,
   VectorClock,
+  ElectionAlgorithmManager,
+  DistributedMutexManager,
 } from "./src/server/synchronization.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -400,6 +402,8 @@ const lamportManager = new LamportClockManager();
 const vectorManager = new VectorClockManager();
 const beaconManager = new BeaconProtocolManager();
 const globalStateManager = new GlobalStateManager();
+const electionManager = new ElectionAlgorithmManager();
+const mutexManager = new DistributedMutexManager();
 
 function getServiceNodeId(serviceName: string): string {
   const lower = serviceName.toLowerCase();
@@ -1430,6 +1434,128 @@ async function startServer() {
     res.json({ transactions: list });
   });
 
+  // Dedicated Multi-Bank Double-Entry Ledger API
+  app.get("/api/ledger", (_req: Request, res: Response) => {
+    const users = listUsers();
+    const genesisTotal = 69000.0;
+    const currentTotal = users.reduce((acc, u) => acc + Number(u.balance || 0), 0);
+
+    const allTxns = Array.from(TRANSACTIONS.values()).sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    let totalDebited = 0;
+    let totalCredited = 0;
+    const journalEntries: any[] = [];
+    let entryCounter = 1;
+
+    for (const txn of allTxns) {
+      const sender = USERS_MAP.get(txn.senderId);
+      const receiver = USERS_MAP.get(txn.receiverId);
+      const senderBank = sender?.bank_name || "Sender Bank";
+      const receiverBank = receiver?.bank_name || "Receiver Bank";
+
+      if (txn.status === "SUCCESS") {
+        totalDebited += txn.amount;
+        totalCredited += txn.amount;
+
+        journalEntries.push({
+          id: `JRN-${String(entryCounter++).padStart(4, "0")}`,
+          transactionId: txn.transactionId,
+          timestamp: txn.createdAt,
+          accountUpi: txn.senderId,
+          userName: sender?.name || txn.senderId.split("@")[0],
+          bank: senderBank,
+          entryType: "DEBIT",
+          amount: txn.amount,
+          mode: txn.mode || "rest",
+          status: "COMMITTED",
+          description: `UPI Payment to ${txn.receiverId}`,
+        });
+
+        journalEntries.push({
+          id: `JRN-${String(entryCounter++).padStart(4, "0")}`,
+          transactionId: txn.transactionId,
+          timestamp: txn.updatedAt || txn.createdAt,
+          accountUpi: txn.receiverId,
+          userName: receiver?.name || txn.receiverId.split("@")[0],
+          bank: receiverBank,
+          entryType: "CREDIT",
+          amount: txn.amount,
+          mode: txn.mode || "rest",
+          status: "COMMITTED",
+          description: `UPI Settlement from ${txn.senderId}`,
+        });
+      } else if (txn.status === "FAILED") {
+        const hadDebit = txn.timeline.some((e) => e.event === "DEBIT_RESERVED" || e.event === "SENDER_DEBIT_SUCCESS");
+        if (hadDebit) {
+          journalEntries.push({
+            id: `JRN-${String(entryCounter++).padStart(4, "0")}`,
+            transactionId: txn.transactionId,
+            timestamp: txn.createdAt,
+            accountUpi: txn.senderId,
+            userName: sender?.name || txn.senderId.split("@")[0],
+            bank: senderBank,
+            entryType: "DEBIT",
+            amount: txn.amount,
+            mode: txn.mode || "rest",
+            status: "ROLLED_BACK",
+            description: `Tentative Debit for ${txn.receiverId}`,
+          });
+
+          journalEntries.push({
+            id: `JRN-${String(entryCounter++).padStart(4, "0")}`,
+            transactionId: txn.transactionId,
+            timestamp: txn.updatedAt || txn.createdAt,
+            accountUpi: txn.senderId,
+            userName: sender?.name || txn.senderId.split("@")[0],
+            bank: senderBank,
+            entryType: "COMPENSATING_CREDIT",
+            amount: txn.amount,
+            mode: txn.mode || "rest",
+            status: "COMMITTED",
+            description: `Saga Compensating Refund: ${txn.failureReason || "Transaction Failed"}`,
+          });
+        }
+      }
+    }
+
+    journalEntries.reverse();
+
+    const bankMap = new Map<string, { bank: string; accountsCount: number; totalBalance: number; debits: number; credits: number }>();
+    for (const u of users) {
+      const b = u.bank || u.bank_name || "Unknown Bank";
+      if (!bankMap.has(b)) {
+        bankMap.set(b, { bank: b, accountsCount: 0, totalBalance: 0, debits: 0, credits: 0 });
+      }
+      const entry = bankMap.get(b)!;
+      entry.accountsCount += 1;
+      entry.totalBalance += Number(u.balance || 0);
+    }
+
+    for (const j of journalEntries) {
+      if (bankMap.has(j.bank)) {
+        const b = bankMap.get(j.bank)!;
+        if (j.entryType === "DEBIT") b.debits += j.amount;
+        if (j.entryType === "CREDIT" || j.entryType === "COMPENSATING_CREDIT") b.credits += j.amount;
+      }
+    }
+
+    res.json({
+      accounts: users,
+      journalEntries,
+      invariants: {
+        genesisSupply: genesisTotal,
+        currentTotalDeposits: currentTotal,
+        isConservationPreserved: Math.abs(currentTotal - genesisTotal) < 0.01,
+        totalDebited,
+        totalCredited,
+        debitCreditParity: Math.abs(totalDebited - totalCredited) < 0.01,
+      },
+      banks: Array.from(bankMap.values()),
+    });
+  });
+
   // WebSocket & WebRTC Stats
   app.get("/api/websocket/stats", (_req: Request, res: Response) => {
     res.json(getStreamStats());
@@ -1772,6 +1898,148 @@ async function startServer() {
     const { nodeId } = req.body || {};
     const b = beaconManager.recordManualBeacon(nodeId || "sender-bank");
     res.json({ beacon: b, beacons: beaconManager.getBeacons() });
+  });
+
+  // 6. Election Algorithms (Bully & Ring)
+  app.post("/api/synchronization/election/bully", (req: Request, res: Response) => {
+    const { initiatorId, crashedNodeId } = req.body || {};
+    const result = electionManager.runBullyElection(
+      initiatorId || "sender-bank",
+      crashedNodeId || "receiver-bank"
+    );
+    broadcastStreamEvent({
+      event: "ELECTION_BULLY_COMPLETED",
+      service: "Election Coordinator",
+      message: `Bully election elected ${result.electedCoordinator} as coordinator`,
+      result,
+    });
+    res.json(result);
+  });
+
+  app.post("/api/synchronization/election/ring", (req: Request, res: Response) => {
+    const { initiatorId, crashedNodeId } = req.body || {};
+    const result = electionManager.runRingElection(
+      initiatorId || "sender-bank",
+      crashedNodeId || "npci"
+    );
+    broadcastStreamEvent({
+      event: "ELECTION_RING_COMPLETED",
+      service: "Election Coordinator",
+      message: `Ring election circulated token and elected ${result.electedCoordinator}`,
+      result,
+    });
+    res.json(result);
+  });
+
+  // 7. Distributed Mutual Exclusion
+  app.post("/api/synchronization/mutex/request", (req: Request, res: Response) => {
+    const { nodeId, algorithm } = req.body || {};
+    const result = mutexManager.requestLock(nodeId || "sender-bank", algorithm || "Ricart-Agrawala");
+    broadcastStreamEvent({
+      event: "MUTEX_LOCK_STATE",
+      service: nodeId || "sender-bank",
+      message: `Mutex lock ${result.granted ? "GRANTED" : "DEFERRED/QUEUED"} via ${result.algorithm}`,
+      result,
+    });
+    res.json(result);
+  });
+
+  app.post("/api/synchronization/mutex/release", (req: Request, res: Response) => {
+    const { nodeId } = req.body || {};
+    const result = mutexManager.releaseLock(nodeId || "sender-bank");
+    broadcastStreamEvent({
+      event: "MUTEX_LOCK_RELEASED",
+      service: nodeId || "sender-bank",
+      message: `Mutex lock released by ${nodeId}`,
+      result,
+    });
+    res.json(result);
+  });
+
+  // 8. UNIT I: Introduction & System Architecture Metadata
+  app.get("/api/unit1/overview", (_req: Request, res: Response) => {
+    res.json({
+      unit: "UNIT I — Introduction to Distributed Systems",
+      definition: "A collection of autonomous computing entities (banks, payment service providers, clearing switches) that communicate over a network and coordinate actions by passing messages, appearing to users as a single coherent payment system.",
+      goals: [
+        { goal: "Resource Sharing", upiContext: "Sharing core-banking ledgers, NPCI routing tables, and fraud-detection models securely across multiple autonomous financial institutions." },
+        { goal: "Openness", upiContext: "Standardized UPI specifications allow any scheduled bank or certified 3rd-party application (TPAP) to integrate using standard APIs." },
+        { goal: "Concurrency", upiContext: "Thousands of simultaneous interbank payments process concurrently without corrupting account balances using isolation and 2-phase locks." },
+        { goal: "Scalability", upiContext: "Horizontal scaling of stateless API gateways and partitioned account databases across geographic zones." },
+        { goal: "Fault Tolerance", upiContext: "Circuit breakers, timeout deadlines, and compensating Saga rollbacks ensure partial node crashes do not freeze customer funds." },
+        { goal: "Transparency", upiContext: "Hiding distribution complexity: Access, Location, Migration, Replication, Concurrency, and Failure transparency." },
+      ],
+      types: [
+        { type: "Distributed Computing Systems", description: "High-performance cluster and grid computing for batch EOD clearing and cryptographic signature verification." },
+        { type: "Distributed Information Systems", description: "Enterprise transaction processing across heterogeneous banking databases with RPC/gRPC and message brokers." },
+        { type: "Distributed Pervasive Systems", description: "Edge UPI soundboxes, mobile QR scanning apps, and IoT POS terminals communicating via MQTT/HTTP." },
+      ],
+      architectures: [
+        { name: "Layered / Multi-Tier", description: "Presentation (React SPA) -> API Gateway -> Transaction Orchestrator -> Core Banking Services." },
+        { name: "Object-Based", description: "Remote Method Invocation (RMI) / gRPC interfaces where remote account objects expose debit/credit stubs." },
+        { name: "Event-Based (Publish-Subscribe)", description: "RabbitMQ topic exchanges decoupled through notification queues and Dead Letter Exchanges." },
+        { name: "Peer-to-Peer (P2P)", description: "Direct interbank settlement and WebRTC browser data channels bypassing centralized switch bottlenecks." },
+      ],
+      middlewareRole: "NPCI acts as distributed transaction middleware, bridging heterogeneous bank architectures, protocols, data formats, and operating systems.",
+      virtualization: "Hardware virtualization and containerization (Docker/Kubernetes) allow each bank microservice to run in isolated user-space environments with independent resource quotas.",
+    });
+  });
+
+  // 9. UNIT IV: Emerging Distributed Paradigms Metadata & Case Studies
+  app.get("/api/unit4/overview", (_req: Request, res: Response) => {
+    res.json({
+      unit: "UNIT IV — Emerging Distributed Paradigms",
+      paradigms: [
+        {
+          name: "Distributed Web-Based Systems",
+          description: "Multi-tier web applications leveraging HTTP/2, REST APIs, JSON encodings, WebSockets, and browser caching to provide seamless real-time transaction tracking.",
+        },
+        {
+          name: "Distributed Object-Based Systems",
+          description: "Encapsulating bank account states inside remote distributed objects accessed via proxies, stubs, and interface definitions (IDL/Protobuf).",
+        },
+        {
+          name: "Distributed File Systems",
+          description: "Replicated, fault-tolerant append-only audit files and transaction journal passbooks distributed across data centers (e.g. HDFS, Ceph, NFS).",
+        },
+        {
+          name: "Serverless Architectures (FaaS)",
+          description: "Event-triggered payment webhooks and fraud verification functions that scale automatically from zero, charging purely for execution compute time.",
+        },
+      ],
+      caseStudies: [
+        {
+          name: "Cloudflare",
+          role: "Edge Security & Reverse Proxy",
+          upiRelevance: "Shields UPI API gateway endpoints against volumetric DDoS attacks, terminates TLS at edge PoPs, and routes DNS queries using Anycast routing.",
+        },
+        {
+          name: "Amazon Web Services (AWS)",
+          role: "Global Multi-AZ Cloud Infrastructure",
+          upiRelevance: "Provides high-availability deployment across multiple Availability Zones, automated failover, DynamoDB / Aurora distributed databases, and SQS/SNS messaging.",
+        },
+        {
+          name: "Apache Hadoop",
+          role: "Batch Analytics & Reconciliation",
+          upiRelevance: "Processes billions of daily transaction log records using HDFS and MapReduce for end-of-day interbank fee settlement, dispute resolution, and regulatory reporting.",
+        },
+        {
+          name: "Kubernetes (K8s)",
+          role: "Container Orchestration & Microservices",
+          upiRelevance: "Manages containerized transaction coordinator pods, automates horizontal pod autoscaling (HPA) during peak festival shopping spikes, and implements service mesh traffic routing.",
+        },
+        {
+          name: "Megaport",
+          role: "Software-Defined Interconnection (SDN)",
+          upiRelevance: "Establishes private, dedicated, high-speed, direct inter-datacenter Ethernet circuits between bank core data centers, bypassing public internet packet jitter.",
+        },
+      ],
+      databaseTradeoffs: {
+        capTheorem: "UPI prioritizes Consistency and Partition Tolerance (CP) over Availability for monetary debits, while switching to Availability (AP) for non-critical balance inquiry caching.",
+        acidVsBase: "Traditional core banks mandate strict ACID guarantees (Atomicity, Consistency, Isolation, Durability). Scaled distributed UPI switches adopt Sagas and BASE (Basically Available, Soft-state, Eventual consistency) with compensating rollbacks.",
+        blockchainComparison: "While Blockchain offers decentralized trustless consensus without a central authority, its latency (seconds to minutes) and low throughput (7-30 TPS) cannot match UPI's centralized NPCI clearing (>15,000 TPS with sub-second finality).",
+      },
+    });
   });
 
   // 6. UNIT IV: Distributed Web-Based Systems Architectural Metadata

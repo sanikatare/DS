@@ -320,6 +320,322 @@ export class LamportClockManager {
 }
 
 // ----------------------------------------------------------------------------
+// 2b. Service-Level Transaction Interceptor (Lamport's Logical Clock)
+// ----------------------------------------------------------------------------
+
+export interface InterceptorAuditEntry {
+  id: string;
+  sequence: number;
+  transactionId: string;
+  sourceService: string;
+  targetService: string;
+  endpoint: string;
+  action: string;
+  direction: "OUTGOING_REQUEST" | "INCOMING_REQUEST" | "OUTGOING_RESPONSE" | "INCOMING_RESPONSE";
+  lamportTimestamp: number;
+  clockBefore: number;
+  clockAfter: number;
+  headers: Record<string, string>;
+  timestamp: string;
+  details?: string;
+}
+
+export interface InterServiceCallEnvelope<T = any> {
+  sourceService: string;
+  targetService: string;
+  endpoint: string;
+  action: string;
+  transactionId: string;
+  headers: Record<string, string>;
+  payload: T;
+  lamportTimestamp: number;
+}
+
+export class ServiceLevelLamportInterceptor {
+  private lamport: LamportClockManager;
+  private auditLog: InterceptorAuditEntry[] = [];
+  private sequenceCounter = 0;
+
+  constructor(lamport: LamportClockManager) {
+    this.lamport = lamport;
+  }
+
+  getAuditLog(limit = 60): InterceptorAuditEntry[] {
+    return [...this.auditLog].reverse().slice(0, limit);
+  }
+
+  getMetrics() {
+    const totalRequests = this.auditLog.filter((e) => e.direction === "OUTGOING_REQUEST").length;
+    const totalResponses = this.auditLog.filter((e) => e.direction === "OUTGOING_RESPONSE").length;
+    return {
+      active: true,
+      protocol: "Lamport's Logical Clock Interceptor (Leslie Lamport 1978)",
+      totalInterceptedRequests: totalRequests,
+      totalInterceptedResponses: totalResponses,
+      totalEventsIntercepted: this.auditLog.length,
+      clocks: this.lamport.getAllClocks(),
+      recentLogs: this.getAuditLog(15),
+    };
+  }
+
+  /**
+   * Increments logical clock value on any transaction event (Rule 1: L_i = L_i + 1)
+   */
+  recordEvent(serviceId: string, description: string): number {
+    return this.lamport.tickLocal(serviceId, description);
+  }
+
+  /**
+   * Prepares and intercepts an outgoing inter-service API request.
+   * Increments sender's Lamport clock value (Rule 2: L_i = L_i + 1)
+   * and attaches timestamp headers to outgoing request.
+   */
+  interceptOutgoingRequest(
+    sourceService: string,
+    targetService: string,
+    endpoint: string,
+    action: string,
+    transactionId: string,
+    payload: any = {}
+  ): { headers: Record<string, string>; lamportTimestamp: number } {
+    const clockBefore = this.lamport.getClock(sourceService);
+    const lamportTimestamp = this.lamport.tickSend(
+      sourceService,
+      targetService,
+      `[Interceptor] ${action} -> ${endpoint}`
+    );
+
+    const headers: Record<string, string> = {
+      "x-lamport-clock": String(lamportTimestamp),
+      "x-lamport-source": sourceService,
+      "x-lamport-target": targetService,
+      "x-transaction-id": transactionId,
+      "x-interceptor-action": action,
+      "x-interceptor-endpoint": endpoint,
+      "x-interceptor-timestamp": new Date().toISOString(),
+    };
+
+    this.auditLog.push({
+      id: `INT-OUT-${Date.now()}-${++this.sequenceCounter}`,
+      sequence: this.sequenceCounter,
+      transactionId,
+      sourceService,
+      targetService,
+      endpoint,
+      action,
+      direction: "OUTGOING_REQUEST",
+      lamportTimestamp,
+      clockBefore,
+      clockAfter: lamportTimestamp,
+      headers,
+      timestamp: new Date().toISOString(),
+      details: `Attached Lamport timestamp L=${lamportTimestamp} to inter-service request ${sourceService} -> ${targetService}`,
+    });
+
+    return { headers, lamportTimestamp };
+  }
+
+  /**
+   * Intercepts an incoming inter-service request at destination service.
+   * Applies Lamport Rule 3: L_j = max(L_j, T) + 1
+   */
+  interceptIncomingRequest(
+    targetService: string,
+    sourceService: string,
+    incomingTimestamp: number,
+    endpoint: string,
+    action: string,
+    transactionId: string,
+    headers: Record<string, string>
+  ): { clockBefore: number; clockAfter: number } {
+    const clockBefore = this.lamport.getClock(targetService);
+    const clockAfter = this.lamport.tickReceive(
+      targetService,
+      sourceService,
+      incomingTimestamp,
+      `[Interceptor] Recv ${action} from ${sourceService}`
+    );
+
+    this.auditLog.push({
+      id: `INT-IN-${Date.now()}-${++this.sequenceCounter}`,
+      sequence: this.sequenceCounter,
+      transactionId,
+      sourceService,
+      targetService,
+      endpoint,
+      action,
+      direction: "INCOMING_REQUEST",
+      lamportTimestamp: clockAfter,
+      clockBefore,
+      clockAfter,
+      headers,
+      timestamp: new Date().toISOString(),
+      details: `Received request with T=${incomingTimestamp}; updated ${targetService} clock from ${clockBefore} to ${clockAfter}`,
+    });
+
+    return { clockBefore, clockAfter };
+  }
+
+  /**
+   * Destination service sends back response/ACK with incremented Lamport timestamp
+   */
+  interceptOutgoingResponse(
+    targetService: string,
+    sourceService: string,
+    endpoint: string,
+    action: string,
+    transactionId: string
+  ): { headers: Record<string, string>; lamportTimestamp: number } {
+    const clockBefore = this.lamport.getClock(targetService);
+    const lamportTimestamp = this.lamport.tickSend(
+      targetService,
+      sourceService,
+      `[Interceptor] ACK ${action} for ${transactionId}`
+    );
+
+    const headers: Record<string, string> = {
+      "x-lamport-clock": String(lamportTimestamp),
+      "x-lamport-source": targetService,
+      "x-lamport-target": sourceService,
+      "x-transaction-id": transactionId,
+      "x-interceptor-status": "SUCCESS",
+    };
+
+    this.auditLog.push({
+      id: `INT-RESP-OUT-${Date.now()}-${++this.sequenceCounter}`,
+      sequence: this.sequenceCounter,
+      transactionId,
+      sourceService: targetService,
+      targetService: sourceService,
+      endpoint,
+      action: `${action}_ACK`,
+      direction: "OUTGOING_RESPONSE",
+      lamportTimestamp,
+      clockBefore,
+      clockAfter: lamportTimestamp,
+      headers,
+      timestamp: new Date().toISOString(),
+      details: `Attached Lamport timestamp L=${lamportTimestamp} to response ACK`,
+    });
+
+    return { headers, lamportTimestamp };
+  }
+
+  /**
+   * Source service receives response/ACK and advances clock
+   */
+  interceptIncomingResponse(
+    sourceService: string,
+    targetService: string,
+    responseTimestamp: number,
+    endpoint: string,
+    action: string,
+    transactionId: string
+  ): { clockBefore: number; clockAfter: number } {
+    const clockBefore = this.lamport.getClock(sourceService);
+    const clockAfter = this.lamport.tickReceive(
+      sourceService,
+      targetService,
+      responseTimestamp,
+      `[Interceptor] Received ACK ${action} from ${targetService}`
+    );
+
+    this.auditLog.push({
+      id: `INT-RESP-IN-${Date.now()}-${++this.sequenceCounter}`,
+      sequence: this.sequenceCounter,
+      transactionId,
+      sourceService: targetService,
+      targetService: sourceService,
+      endpoint,
+      action: `${action}_ACK`,
+      direction: "INCOMING_RESPONSE",
+      lamportTimestamp: clockAfter,
+      clockBefore,
+      clockAfter,
+      headers: { "x-lamport-clock": String(responseTimestamp) },
+      timestamp: new Date().toISOString(),
+      details: `Received ACK with T=${responseTimestamp}; advanced ${sourceService} clock to L=${clockAfter}`,
+    });
+
+    return { clockBefore, clockAfter };
+  }
+
+  /**
+   * Executes a complete inter-service API call through the interceptor lifecycle:
+   * 1. Outgoing send (increments clock, attaches timestamp headers)
+   * 2. Destination receive (updates clock to max(current, incoming)+1)
+   * 3. Service operation execution
+   * 4. Outgoing response (increments clock, attaches timestamp)
+   * 5. Source receive (updates clock)
+   */
+  async invokeInterService<T>(
+    sourceService: string,
+    targetService: string,
+    endpoint: string,
+    action: string,
+    transactionId: string,
+    payload: any,
+    handler: (envelope: InterServiceCallEnvelope) => Promise<T>
+  ): Promise<{ result: T; sendLamport: number; recvLamport: number; respLamport: number }> {
+    const { headers, lamportTimestamp: sendLamport } = this.interceptOutgoingRequest(
+      sourceService,
+      targetService,
+      endpoint,
+      action,
+      transactionId,
+      payload
+    );
+
+    const { clockAfter: recvLamport } = this.interceptIncomingRequest(
+      targetService,
+      sourceService,
+      sendLamport,
+      endpoint,
+      action,
+      transactionId,
+      headers
+    );
+
+    const envelope: InterServiceCallEnvelope = {
+      sourceService,
+      targetService,
+      endpoint,
+      action,
+      transactionId,
+      headers,
+      payload,
+      lamportTimestamp: recvLamport,
+    };
+
+    const result = await handler(envelope);
+
+    const { lamportTimestamp: respLamport } = this.interceptOutgoingResponse(
+      targetService,
+      sourceService,
+      endpoint,
+      action,
+      transactionId
+    );
+
+    this.interceptIncomingResponse(
+      sourceService,
+      targetService,
+      respLamport,
+      endpoint,
+      action,
+      transactionId
+    );
+
+    return { result, sendLamport, recvLamport, respLamport };
+  }
+
+  reset() {
+    this.auditLog = [];
+    this.sequenceCounter = 0;
+  }
+}
+
+// ----------------------------------------------------------------------------
 // 3. Vector Clock Algorithm
 // ----------------------------------------------------------------------------
 
@@ -739,5 +1055,305 @@ export class GlobalStateManager {
 
   getSnapshots() {
     return this.snapshots;
+  }
+}
+
+// ----------------------------------------------------------------------------
+// 6. Election Algorithms (Bully & Ring Algorithms)
+// ----------------------------------------------------------------------------
+
+export interface ElectionTraceStep {
+  step: number;
+  from: string;
+  to: string;
+  type: "ELECTION" | "OK" | "COORDINATOR" | "TOKEN";
+  message: string;
+  timestamp: string;
+}
+
+export interface ElectionResult {
+  algorithm: "Bully" | "Ring";
+  initiator: string;
+  crashedNode: string;
+  electedCoordinator: string;
+  trace: ElectionTraceStep[];
+  explanation: string;
+}
+
+export class ElectionAlgorithmManager {
+  private nodes = [
+    { id: "sender-bank", name: "Sender Bank", priority: 1 },
+    { id: "transaction-service", name: "Transaction Service", priority: 2 },
+    { id: "npci", name: "NPCI Switch", priority: 3 },
+    { id: "receiver-bank", name: "Receiver Bank", priority: 4 },
+  ];
+
+  runBullyElection(initiatorId = "sender-bank", crashedNodeId = "receiver-bank"): ElectionResult {
+    const trace: ElectionTraceStep[] = [];
+    let stepNum = 1;
+    const now = () => new Date().toISOString();
+
+    const activeNodes = this.nodes.filter((n) => n.id !== crashedNodeId);
+    const initiator = this.nodes.find((n) => n.id === initiatorId) || this.nodes[0];
+
+    trace.push({
+      step: stepNum++,
+      from: initiator.id,
+      to: "BROADCAST",
+      type: "ELECTION",
+      message: `${initiator.name} (Priority ${initiator.priority}) detected coordinator failure (${crashedNodeId}). Initiates Bully election.`,
+      timestamp: now(),
+    });
+
+    // Send ELECTION to all higher priority nodes
+    const higherNodes = activeNodes.filter((n) => n.priority > initiator.priority);
+
+    let highestActive = initiator;
+
+    if (higherNodes.length > 0) {
+      for (const target of higherNodes) {
+        trace.push({
+          step: stepNum++,
+          from: initiator.id,
+          to: target.id,
+          type: "ELECTION",
+          message: `${initiator.name} sends ELECTION challenge to higher priority node ${target.name} (Priority ${target.priority}).`,
+          timestamp: now(),
+        });
+
+        trace.push({
+          step: stepNum++,
+          from: target.id,
+          to: initiator.id,
+          type: "OK",
+          message: `${target.name} responds 'OK' to ${initiator.name} and takes over the election.`,
+          timestamp: now(),
+        });
+      }
+
+      // The highest priority active node wins
+      highestActive = higherNodes.reduce((prev, curr) => (curr.priority > prev.priority ? curr : prev));
+
+      trace.push({
+        step: stepNum++,
+        from: highestActive.id,
+        to: "BROADCAST",
+        type: "COORDINATOR",
+        message: `${highestActive.name} (Priority ${highestActive.priority}) has the highest priority among active nodes and declares itself COORDINATOR!`,
+        timestamp: now(),
+      });
+    } else {
+      // Initiator is already highest active
+      trace.push({
+        step: stepNum++,
+        from: initiator.id,
+        to: "BROADCAST",
+        type: "COORDINATOR",
+        message: `No higher priority active nodes found. ${initiator.name} declares victory as the new COORDINATOR!`,
+        timestamp: now(),
+      });
+    }
+
+    return {
+      algorithm: "Bully",
+      initiator: initiator.id,
+      crashedNode: crashedNodeId,
+      electedCoordinator: highestActive.id,
+      trace,
+      explanation: `In the Bully Algorithm, any process that notices coordinator failure sends an ELECTION message to all processes with higher priority numbers. If no process responds, it bullies everyone and crowns itself coordinator. If a higher process responds with OK, that higher process takes over. Here, ${highestActive.name} (Priority ${highestActive.priority}) was elected coordinator.`,
+    };
+  }
+
+  runRingElection(initiatorId = "sender-bank", crashedNodeId = "npci"): ElectionResult {
+    const trace: ElectionTraceStep[] = [];
+    let stepNum = 1;
+    const now = () => new Date().toISOString();
+
+    const ring = [...this.nodes];
+    const activeNodes = ring.filter((n) => n.id !== crashedNodeId);
+    const initiator = ring.find((n) => n.id === initiatorId) || activeNodes[0];
+
+    const visitedIds = [initiator.id];
+    let maxIdNode = initiator;
+
+    trace.push({
+      step: stepNum++,
+      from: initiator.id,
+      to: "RING_NEXT",
+      type: "ELECTION",
+      message: `${initiator.name} notices coordinator failure (${crashedNodeId}) and circulates ELECTION token [${visitedIds.join(", ")}] around the logical ring.`,
+      timestamp: now(),
+    });
+
+    let current = initiator;
+    for (let i = 0; i < ring.length; i++) {
+      const currIdx = ring.findIndex((n) => n.id === current.id);
+      let nextIdx = (currIdx + 1) % ring.length;
+      let nextNode = ring[nextIdx];
+
+      // Skip crashed node in ring
+      if (nextNode.id === crashedNodeId) {
+        trace.push({
+          step: stepNum++,
+          from: current.id,
+          to: nextNode.id,
+          type: "ELECTION",
+          message: `${current.name} detects ${nextNode.name} is unresponsive (Crashed). Bypassing in logical ring.`,
+          timestamp: now(),
+        });
+        nextIdx = (nextIdx + 1) % ring.length;
+        nextNode = ring[nextIdx];
+      }
+
+      if (nextNode.id === initiator.id) {
+        // Complete circle
+        break;
+      }
+
+      visitedIds.push(nextNode.id);
+      if (nextNode.priority > maxIdNode.priority) {
+        maxIdNode = nextNode;
+      }
+
+      trace.push({
+        step: stepNum++,
+        from: current.id,
+        to: nextNode.id,
+        type: "TOKEN",
+        message: `Token passes to ${nextNode.name}. Active list: [${visitedIds.join(", ")}]. Current max priority: ${maxIdNode.name} (${maxIdNode.priority}).`,
+        timestamp: now(),
+      });
+
+      current = nextNode;
+    }
+
+    trace.push({
+      step: stepNum++,
+      from: initiator.id,
+      to: "RING_BROADCAST",
+      type: "COORDINATOR",
+      message: `Election token returned to ${initiator.name}. Maximum priority process is ${maxIdNode.name} (Priority ${maxIdNode.priority}). COORDINATOR token circulated to announce victory.`,
+      timestamp: now(),
+    });
+
+    return {
+      algorithm: "Ring",
+      initiator: initiator.id,
+      crashedNode: crashedNodeId,
+      electedCoordinator: maxIdNode.id,
+      trace,
+      explanation: `In the Ring Algorithm, processes are logically organized in a ring. When coordinator failure is detected, an ELECTION token is passed sequentially around the active ring collecting process IDs. Once the token returns to the initiator, the process with the highest ID is elected and a COORDINATOR token is circulated. Here, ${maxIdNode.name} (Priority ${maxIdNode.priority}) won.`,
+    };
+  }
+}
+
+// ----------------------------------------------------------------------------
+// 7. Distributed Mutual Exclusion Algorithms
+// ----------------------------------------------------------------------------
+
+export interface MutexRequestResult {
+  algorithm: "Ricart-Agrawala" | "Token-Ring";
+  requestingNode: string;
+  resource: string;
+  granted: boolean;
+  messagesExchanged: number;
+  trace: { step: number; event: string; detail: string }[];
+  selfStudyNote: string;
+}
+
+export class DistributedMutexManager {
+  private currentLockHolder: string | null = null;
+  private queue: string[] = [];
+
+  requestLock(nodeId: string, algorithm: "Ricart-Agrawala" | "Token-Ring" = "Ricart-Agrawala"): MutexRequestResult {
+    const trace = [];
+    let step = 1;
+
+    trace.push({
+      step: step++,
+      event: "REQUEST_INITIATED",
+      detail: `${nodeId} requests exclusive mutual exclusion lock for atomic core-banking ledger mutation.`,
+    });
+
+    if (algorithm === "Ricart-Agrawala") {
+      trace.push({
+        step: step++,
+        event: "TIMESTAMPED_REQUEST_BROADCAST",
+        detail: `${nodeId} multicasts REQUEST(timestamp=T, nodeId=${nodeId}) to all other distributed bank nodes.`,
+      });
+
+      if (!this.currentLockHolder) {
+        this.currentLockHolder = nodeId;
+        trace.push({
+          step: step++,
+          event: "ALL_REPLIES_RECEIVED",
+          detail: `All participating nodes reply with OK. ${nodeId} enters Critical Section (CS) to mutate account balance.`,
+        });
+
+        return {
+          algorithm: "Ricart-Agrawala",
+          requestingNode: nodeId,
+          resource: "Core-Banking Account Ledger Lock",
+          granted: true,
+          messagesExchanged: 6, // 2*(N-1) messages for N=4
+          trace,
+          selfStudyNote: "Ricart-Agrawala requires 2*(N-1) messages per CS entry using Lamport timestamps for causal priority. Lodha & Kshemkalyani's fair algorithm further optimizes message complexity by restricting request forwarding.",
+        };
+      } else {
+        this.queue.push(nodeId);
+        trace.push({
+          step: step++,
+          event: "DEFERRED_REPLY",
+          detail: `Lock is currently held by ${this.currentLockHolder}. Reply deferred. ${nodeId} queued in FIFO waiter queue.`,
+        });
+
+        return {
+          algorithm: "Ricart-Agrawala",
+          requestingNode: nodeId,
+          resource: "Core-Banking Account Ledger Lock",
+          granted: false,
+          messagesExchanged: 3,
+          trace,
+          selfStudyNote: "When a process holding CS receives a request with lower timestamp priority, it defers its reply until it exits the Critical Section.",
+        };
+      }
+    } else {
+      // Token Ring
+      trace.push({
+        step: step++,
+        event: "TOKEN_RING_CIRCULATION",
+        detail: `Mutual exclusion token is circulating sequentially through Bank Nodes.`,
+      });
+
+      this.currentLockHolder = nodeId;
+      trace.push({
+        step: step++,
+        event: "TOKEN_SEIZED",
+        detail: `${nodeId} seized circulating token and entered Critical Section.`,
+      });
+
+      return {
+        algorithm: "Token-Ring",
+        requestingNode: nodeId,
+        resource: "Core-Banking Account Ledger Lock",
+        granted: true,
+        messagesExchanged: 4,
+        trace,
+        selfStudyNote: "In Token Ring mutual exclusion, only the holder of the circulating token may enter the critical section. No starvation is possible as the token rotates predictably.",
+      };
+    }
+  }
+
+  releaseLock(nodeId: string) {
+    if (this.currentLockHolder === nodeId) {
+      this.currentLockHolder = null;
+      const next = this.queue.shift();
+      if (next) {
+        this.currentLockHolder = next;
+        return { releasedBy: nodeId, nextHolder: next };
+      }
+      return { releasedBy: nodeId, nextHolder: null };
+    }
+    return { releasedBy: nodeId, message: "Node was not holding lock" };
   }
 }

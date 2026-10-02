@@ -1,14 +1,14 @@
 // UPI Distributed Transaction Simulator - Optimised API & Shared WebSocket Multiplexer
 
-const TXN_BASE = import.meta.env.VITE_TXN_API_URL || "";
-const SENDER_BANK_BASE = import.meta.env.VITE_SENDER_BANK_URL || "/services/sender-bank";
-const NPCI_BASE = import.meta.env.VITE_NPCI_URL || "/services/npci";
-const RECEIVER_BANK_BASE = import.meta.env.VITE_RECEIVER_BANK_URL || "/services/receiver-bank";
+// In this unified fullstack applet, all endpoints (/api/*, /failure/*, /services/*)
+// are served on the same origin via Express.
+const TXN_BASE = "";
+const SENDER_BANK_BASE = "/services/sender-bank";
+const NPCI_BASE = "/services/npci";
+const RECEIVER_BANK_BASE = "/services/receiver-bank";
 const WS_PROTO = typeof window !== "undefined" && window.location.protocol === "https:" ? "wss:" : "ws:";
 const WS_HOST = typeof window !== "undefined" ? window.location.host : "localhost:3000";
-const WS_URL =
-  import.meta.env.VITE_TXN_WS_URL ||
-  (TXN_BASE ? TXN_BASE.replace(/^http/, "ws") + "/ws/transactions" : `${WS_PROTO}//${WS_HOST}/ws/transactions`);
+const WS_URL = `${WS_PROTO}//${WS_HOST}/ws/transactions`;
 
 async function safeJson(res) {
   const text = await res.text();
@@ -19,12 +19,18 @@ async function safeJson(res) {
   }
 }
 
-async function request(path, options, baseUrl = TXN_BASE) {
+async function request(path, options, baseUrl = "") {
+  let targetUrl = `${baseUrl}${path}`;
+  if (targetUrl.startsWith("http://localhost:8000")) {
+    targetUrl = targetUrl.replace("http://localhost:8000", "");
+  } else if (targetUrl.startsWith("http://127.0.0.1:8000")) {
+    targetUrl = targetUrl.replace("http://127.0.0.1:8000", "");
+  }
   let res;
   try {
-    res = await fetch(`${baseUrl}${path}`, options);
+    res = await fetch(targetUrl, options);
   } catch {
-    throw new Error(`Could not reach service at ${baseUrl}${path}. Is it running?`);
+    throw new Error(`Could not reach service at ${targetUrl || path}. Is it running?`);
   }
   const data = await safeJson(res);
   if (!res.ok) {
@@ -58,6 +64,18 @@ export async function fetchTransactions() {
   return data.transactions;
 }
 
+export async function fetchLedger() {
+  return request("/api/ledger");
+}
+
+export async function fetchWebRTCStats() {
+  return request("/api/websocket/stats");
+}
+
+export async function fetchWebRTCRooms() {
+  return request("/api/webrtc/rooms");
+}
+
 export async function fetchStats() {
   return request("/api/stats");
 }
@@ -83,8 +101,14 @@ export async function resetSystem() {
 }
 
 export async function checkHealth(baseUrl, name, port) {
+  let targetUrl = `${baseUrl || ""}/health`;
+  if (targetUrl.startsWith("http://localhost:8000")) {
+    targetUrl = targetUrl.replace("http://localhost:8000", "");
+  } else if (targetUrl.startsWith("http://127.0.0.1:8000")) {
+    targetUrl = targetUrl.replace("http://127.0.0.1:8000", "");
+  }
   try {
-    const res = await fetch(`${baseUrl}/health`);
+    const res = await fetch(targetUrl);
     if (res.ok) {
       return { service: name, port, status: "healthy" };
     }
@@ -195,6 +219,46 @@ export async function pulseBeacon(nodeId) {
 
 export async function fetchArchitecture() {
   return request("/api/synchronization/architecture");
+}
+
+export async function fetchUnit1Overview() {
+  return request("/api/unit1/overview");
+}
+
+export async function fetchUnit4Overview() {
+  return request("/api/unit4/overview");
+}
+
+export async function runBullyElection(initiatorId, crashedNodeId) {
+  return request("/api/synchronization/election/bully", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ initiatorId, crashedNodeId }),
+  });
+}
+
+export async function runRingElection(initiatorId, crashedNodeId) {
+  return request("/api/synchronization/election/ring", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ initiatorId, crashedNodeId }),
+  });
+}
+
+export async function requestMutexLock(nodeId, algorithm) {
+  return request("/api/synchronization/mutex/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nodeId, algorithm }),
+  });
+}
+
+export async function releaseMutexLock(nodeId) {
+  return request("/api/synchronization/mutex/release", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nodeId }),
+  });
 }
 
 // ---------------------------------------------------------------------------
