@@ -37,7 +37,6 @@ export default function Navbar() {
           <span className="upi-arrow-green"></span>
         </div>
         <span className="brand-text">UPI</span>
-        <span className="brand-badge">Distributed Systems</span>
       </Link>
 
       <nav className="top-nav-links" aria-label="Main Navigation">

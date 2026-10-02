@@ -1,4 +1,5 @@
-import express, { Request, Response } from "express";
+import express from "express";
+import type { Request, Response } from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
@@ -11,10 +12,10 @@ import {
   VectorClockManager,
   BeaconProtocolManager,
   GlobalStateManager,
-  VectorClock,
   ElectionAlgorithmManager,
   DistributedMutexManager,
-} from "./src/server/synchronization.js";
+} from "./src/server/synchronization.ts";
+import type { VectorClock } from "./src/server/synchronization.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -247,11 +248,12 @@ const FRIENDLY_TO_TARGET: Record<string, keyof typeof FAILURE_STATE> = {
 // Circuit Breaker Implementation
 // ---------------------------------------------------------------------------
 
-enum CircuitState {
-  CLOSED = "CLOSED",
-  OPEN = "OPEN",
-  HALF_OPEN = "HALF_OPEN",
-}
+const CircuitState = {
+  CLOSED: "CLOSED",
+  OPEN: "OPEN",
+  HALF_OPEN: "HALF_OPEN",
+} as const;
+type CircuitState = (typeof CircuitState)[keyof typeof CircuitState];
 
 class CircuitBreaker {
   name: string;

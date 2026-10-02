@@ -9,7 +9,7 @@ import {
   VectorClockManager,
   BeaconProtocolManager,
   GlobalStateManager,
-} from "./src/server/synchronization.js";
+} from "./src/server/synchronization.ts";
 
 function assert(condition: boolean, message: string) {
   if (!condition) {

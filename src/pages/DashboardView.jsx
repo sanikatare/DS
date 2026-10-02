@@ -94,23 +94,6 @@ export default function DashboardView() {
 
   return (
     <PageShell connStatus={connStatus}>
-      {/* Educational Banner */}
-      <div className="edu-callout">
-        <div className="edu-callout-icon">
-          <BookOpen size={24} />
-        </div>
-        <div>
-          <div className="edu-callout-title">
-            Distributed Systems Educational Simulator — Unified Payments Interface (UPI)
-          </div>
-          <div className="edu-callout-desc">
-            An interactive educational implementation of <strong>Unit I (Architecture)</strong>,{" "}
-            <strong>Unit II (Communication)</strong>, <strong>Unit III (Synchronization)</strong>, and{" "}
-            <strong>Unit IV (Emerging Paradigms)</strong> using India's multi-tier interbank payment network.
-          </div>
-        </div>
-      </div>
-
       {/* Header */}
       <div className="page-header">
         <div>

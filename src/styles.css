@@ -172,12 +172,22 @@ a:focus-visible {
   text-decoration: none;
   color: var(--ink-primary);
   flex-shrink: 0;
+  transition: transform 0.28s var(--ease-spring);
+}
+
+.brand-wordmark:hover {
+  transform: translateY(-1px) scale(1.02);
 }
 
 .upi-logo-mark {
   display: flex;
   align-items: center;
   gap: 3px;
+  transition: filter 0.3s ease;
+}
+
+.brand-wordmark:hover .upi-logo-mark {
+  filter: drop-shadow(0 2px 6px rgba(255, 102, 0, 0.25));
 }
 
 .upi-arrow-orange {
@@ -186,6 +196,8 @@ a:focus-visible {
   border-top: 10px solid transparent;
   border-bottom: 10px solid transparent;
   border-left: 14px solid var(--upi-orange);
+  transition: transform 0.25s ease;
+  animation: upiOrangePulse 3.5s ease-in-out infinite;
 }
 
 .upi-arrow-green {
@@ -194,6 +206,36 @@ a:focus-visible {
   border-top: 10px solid transparent;
   border-bottom: 10px solid transparent;
   border-right: 14px solid var(--upi-green);
+  transition: transform 0.25s ease;
+  animation: upiGreenPulse 3.5s ease-in-out infinite;
+}
+
+.brand-wordmark:hover .upi-arrow-orange {
+  animation: upiOrangeShift 0.8s ease-in-out infinite alternate;
+}
+
+.brand-wordmark:hover .upi-arrow-green {
+  animation: upiGreenShift 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes upiOrangePulse {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(1px); }
+}
+
+@keyframes upiGreenPulse {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-1px); }
+}
+
+@keyframes upiOrangeShift {
+  from { transform: translateX(0); }
+  to { transform: translateX(2.5px); }
+}
+
+@keyframes upiGreenShift {
+  from { transform: translateX(0); }
+  to { transform: translateX(-2.5px); }
 }
 
 .brand-text {
@@ -202,8 +244,20 @@ a:focus-visible {
   font-weight: 900;
   letter-spacing: -0.03em;
   background: linear-gradient(135deg, var(--upi-orange) 0%, #D95300 45%, var(--upi-green) 100%);
+  background-size: 200% 200%;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  animation: upiGradientFlow 7s ease infinite;
+  transition: letter-spacing 0.3s ease;
+}
+
+.brand-wordmark:hover .brand-text {
+  letter-spacing: -0.01em;
+}
+
+@keyframes upiGradientFlow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
 .brand-badge {
